@@ -4,7 +4,18 @@ import { getImportIssues, getLatestImportRun, getTemplate, getTemplateTree } fro
 import { renderCommentHtml } from "@/lib/render";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EditableName } from "@/components/editable-name";
+import { CommentEditor } from "@/components/comment-editor";
+import { TemplateActions } from "@/components/template-actions";
 import type { Comment, ImportIssue } from "@/lib/types";
+import {
+  copyTemplateAction,
+  deleteTemplateAction,
+  renameItemAction,
+  renameSectionAction,
+  renameTemplateAction,
+  updateCommentAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -111,27 +122,36 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
     comments: tree.sections.reduce((n, s) => n + s.items.reduce((m, i) => m + i.comments.length, 0), 0),
   };
 
+  // Bind template id into the actions so client components stay simple.
+  const renameTemplate = renameTemplateAction.bind(null, id);
+  const copy = copyTemplateAction.bind(null, id);
+  const del = deleteTemplateAction.bind(null, id);
+
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{tree.name}</h1>
-          {parent ? (
-            <Badge variant="secondary">
-              copy of{" "}
-              <Link href={`/templates/${parent.id}`} className="underline">
-                {parent.name}
-              </Link>
-            </Badge>
-          ) : (
-            <Badge variant="outline">{tree.source_platform}</Badge>
-          )}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <EditableName as="h1" name={tree.name} onSave={renameTemplate} className="text-2xl font-semibold tracking-tight" />
+            {parent ? (
+              <Badge variant="secondary">
+                copy of&nbsp;
+                <Link href={`/templates/${parent.id}`} className="underline">
+                  {parent.name}
+                </Link>
+              </Badge>
+            ) : (
+              <Badge variant="outline">{tree.source_platform}</Badge>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {counts.sections} sections · {counts.items} items · {counts.comments} comments
+            {tree.source_file_name && <> · from <span className="font-mono">{tree.source_file_name}</span></>}
+            {run && <> · imported {new Date(run.created_at).toLocaleString()}</>}
+            {parent && <> · copied {new Date(tree.created_at).toLocaleString()}</>}
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {counts.sections} sections · {counts.items} items · {counts.comments} comments
-          {tree.source_file_name && <> · from <span className="font-mono">{tree.source_file_name}</span></>}
-          {run && <> · imported {new Date(run.created_at).toLocaleString()}</>}
-        </p>
+        <TemplateActions onCopy={copy} onDelete={del} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -140,7 +160,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
             <Card key={s.id} id={`section-${s.id}`}>
               <CardHeader>
                 <CardTitle className="text-base">
-                  {s.name}
+                  <EditableName name={s.name} onSave={renameSectionAction.bind(null, id, s.id)} />
                   <span className="ml-2 text-xs font-normal text-muted-foreground">{s.items.length} items</span>
                 </CardTitle>
               </CardHeader>
@@ -148,7 +168,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
                 {s.items.map((it) => (
                   <details key={it.id} className="rounded-md border">
                     <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
-                      {it.name}
+                      <EditableName name={it.name} onSave={renameItemAction.bind(null, id, it.id)} />
                       <span className="ml-2 text-xs font-normal text-muted-foreground">{it.comments.length}</span>
                     </summary>
                     <ul className="divide-y">
@@ -161,7 +181,14 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
                             {c.recommendation && <span className="text-xs text-muted-foreground">rec: {c.recommendation}</span>}
                           </div>
                           <div className="mt-1">
-                            <CommentBody c={c} />
+                            <CommentEditor
+                              name={c.name}
+                              bodyHtml={c.body_html}
+                              bodyText={c.body_text}
+                              onSave={updateCommentAction.bind(null, id, c.id)}
+                            >
+                              <CommentBody c={c} />
+                            </CommentEditor>
                           </div>
                           <ExtraDetails extra={c.extra} />
                         </li>
@@ -193,6 +220,17 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
                 {run.file_hash && (
                   <div className="truncate font-mono text-xs text-muted-foreground">sha256 {run.file_hash.slice(0, 16)}…</div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+          {parent && issues.length === 0 && (
+            <Card>
+              <CardContent className="pt-6 text-sm text-muted-foreground">
+                Import notes live on the original:{" "}
+                <Link href={`/templates/${parent.id}`} className="underline">
+                  {parent.name}
+                </Link>
+                .
               </CardContent>
             </Card>
           )}
