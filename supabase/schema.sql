@@ -119,3 +119,9 @@ alter table items          enable row level security;
 alter table comments       enable row level security;
 alter table import_runs    enable row level security;
 alter table import_issues  enable row level security;
+
+-- migration: add_extra_to_sections_and_items
+-- The Spectora export HTML-escapes and sometimes pads section/item names.
+-- Keep the raw value alongside the cleaned one so nothing is lost.
+alter table sections add column if not exists extra jsonb not null default '{}'::jsonb;
+alter table items    add column if not exists extra jsonb not null default '{}'::jsonb;

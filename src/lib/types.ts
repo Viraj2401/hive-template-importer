@@ -21,6 +21,8 @@ export interface Section {
   template_id: UUID;
   name: string;
   position: number;
+  /** e.g. { raw_name: "Siding, Flashing &amp; Trim" } when the source name was escaped or padded. */
+  extra: Record<string, string | number | boolean | null>;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +32,7 @@ export interface Item {
   section_id: UUID;
   name: string;
   position: number;
+  extra: Record<string, string | number | boolean | null>;
   created_at: string;
   updated_at: string;
 }
