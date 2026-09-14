@@ -69,6 +69,10 @@ export interface ImportRun {
   issues_count: number | null;
   columns_seen: string[] | null;
   columns_mapped: string[] | null;
+  /** 4-column shape of what the parser saw; lets the fidelity check re-run after edits. */
+  source_snapshot: import("@/lib/fidelity").Snapshot | null;
+  /** { atImport, latest } fidelity reports. */
+  fidelity: import("@/lib/fidelity").FidelityRecord | null;
   created_at: string;
 }
 

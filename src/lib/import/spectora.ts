@@ -34,11 +34,35 @@ export const MAPPED_COLUMNS = {
   recommendation: "recommendation",
 } as const;
 
+/**
+ * The 4-column shape the importer promises to preserve. Comment Text is
+ * required even though individual cells may be blank (form fields): a file
+ * with no such column at all would import as a skeleton with every narrative
+ * silently missing, which is the exact failure this importer exists to prevent.
+ */
 const REQUIRED: ReadonlyArray<string> = [
   MAPPED_COLUMNS.sectionName,
   MAPPED_COLUMNS.itemName,
   MAPPED_COLUMNS.commentName,
+  MAPPED_COLUMNS.commentText,
 ];
+
+/**
+ * SheetJS falls back to treating any bytes it cannot identify as CSV text, so
+ * a PDF or an image would "parse" into a one-column sheet and fail later with
+ * a confusing "missing columns" message. Sniff first: accept OLE2 (.xls), ZIP
+ * containers (.xlsx/.ods) or plain text (.csv/.tsv); reject other binary.
+ */
+export function looksLikeSpreadsheetBytes(u8: Uint8Array): boolean {
+  if (u8.length >= 4 && u8[0] === 0xd0 && u8[1] === 0xcf && u8[2] === 0x11 && u8[3] === 0xe0) return true;
+  if (u8.length >= 4 && u8[0] === 0x50 && u8[1] === 0x4b && (u8[2] === 0x03 || u8[2] === 0x05 || u8[2] === 0x07)) return true;
+  const n = Math.min(u8.length, 4096);
+  for (let i = 0; i < n; i++) {
+    const b = u8[i];
+    if (b === 0x7f || (b < 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d)) return false;
+  }
+  return true;
+}
 
 /** Not mapped to a field, but read for a consistency check. */
 const ORDER_COLUMN = "order";
@@ -102,9 +126,17 @@ export function suggestName(fileName: string): string {
 // ---------- parser ----------
 
 export function parseSpectoraExport(data: Uint8Array | ArrayBuffer, fileName: string): ParsedTemplate {
+  const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+  if (bytes.length === 0) throw new ImportRejectedError("The file is empty (0 bytes).", { fileName });
+  if (!looksLikeSpreadsheetBytes(bytes)) {
+    throw new ImportRejectedError(
+      "The file is not a readable spreadsheet. Expected Spectora's .xls or .xlsx export (or a .csv in the same shape).",
+      { fileName },
+    );
+  }
   let wb: XLSX.WorkBook;
   try {
-    wb = XLSX.read(data, { type: data instanceof ArrayBuffer ? "array" : "buffer" });
+    wb = XLSX.read(bytes, { type: "buffer" });
   } catch {
     throw new ImportRejectedError("The file is not a readable spreadsheet. Expected Spectora's .xls or .xlsx export.", {
       fileName,

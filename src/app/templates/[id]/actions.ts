@@ -43,6 +43,14 @@ export async function updateCommentAction(
   return r;
 }
 
+export async function recheckFidelityAction(templateId: string): Promise<Result> {
+  const r = await wrap(async () => {
+    await m.recheckFidelity(templateId);
+  });
+  if (r.ok) revalidatePath(`/templates/${templateId}`);
+  return r;
+}
+
 export async function copyTemplateAction(templateId: string): Promise<never> {
   const newId = await m.copyTemplate(templateId);
   revalidatePath("/");

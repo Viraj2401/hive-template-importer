@@ -1,8 +1,9 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { hasHtml, stripTags } from "@/lib/import/spectora";
-import { getTemplateTree } from "./templates";
+import { getLatestImportRun, getTemplateTree } from "./templates";
 import { insertTree } from "./tree-insert";
+import { computeFidelity, snapshotFromTree, type FidelityRecord, type FidelityReport } from "@/lib/fidelity";
 
 function requireName(name: string, what: string): string {
   const n = name.trim();
@@ -99,6 +100,24 @@ export async function copyTemplate(sourceId: string, newName?: string): Promise<
     await sb.from("templates").delete().eq("id", newId);
     throw e;
   }
+}
+
+/**
+ * Re-run the fidelity check against the snapshot taken at import. After edits
+ * this shows exactly what has drifted from the source, and where.
+ */
+export async function recheckFidelity(templateId: string): Promise<FidelityReport> {
+  const sb = supabaseServer();
+  const run = await getLatestImportRun(templateId);
+  if (!run) throw new Error("This template has no import run to check against (copies inherit none).");
+  if (!run.source_snapshot) throw new Error("No source snapshot was stored for this import.");
+  const tree = await getTemplateTree(templateId);
+  if (!tree) throw new Error("Template not found.");
+  const latest = computeFidelity(run.source_snapshot, snapshotFromTree(tree));
+  const record: FidelityRecord = { atImport: run.fidelity?.atImport ?? latest, latest };
+  const { error } = await sb.from("import_runs").update({ fidelity: record }).eq("id", run.id);
+  if (error) throw new Error(error.message);
+  return latest;
 }
 
 export async function deleteTemplate(id: string): Promise<void> {

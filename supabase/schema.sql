@@ -125,3 +125,10 @@ alter table import_issues  enable row level security;
 -- Keep the raw value alongside the cleaned one so nothing is lost.
 alter table sections add column if not exists extra jsonb not null default '{}'::jsonb;
 alter table items    add column if not exists extra jsonb not null default '{}'::jsonb;
+
+-- migration: add_fidelity_to_import_runs
+-- Fidelity report: what the parser saw (snapshot) and how the stored tree compared to it (fidelity).
+-- The snapshot is the 4-column shape (section / item / comment name / comment text) so the
+-- check can be re-run later to show drift from the source after edits.
+alter table import_runs add column if not exists source_snapshot jsonb;
+alter table import_runs add column if not exists fidelity jsonb;

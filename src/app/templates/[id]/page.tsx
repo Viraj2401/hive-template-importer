@@ -7,10 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EditableName } from "@/components/editable-name";
 import { CommentEditor } from "@/components/comment-editor";
 import { TemplateActions } from "@/components/template-actions";
+import { FidelityPanel } from "@/components/fidelity-panel";
 import type { Comment, ImportIssue } from "@/lib/types";
 import {
   copyTemplateAction,
   deleteTemplateAction,
+  recheckFidelityAction,
   renameItemAction,
   renameSectionAction,
   renameTemplateAction,
@@ -202,6 +204,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          {run?.fidelity && <FidelityPanel record={run.fidelity} onRecheck={recheckFidelityAction.bind(null, id)} />}
           {run && (
             <Card>
               <CardHeader>

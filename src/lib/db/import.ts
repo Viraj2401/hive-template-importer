@@ -5,6 +5,8 @@ import type { ParsedTemplate } from "@/lib/import/types";
 import { parseSpectoraExport } from "@/lib/import/spectora";
 import { ImportRejectedError } from "@/lib/import/types";
 import { insertTree } from "./tree-insert";
+import { getTemplateTree } from "./templates";
+import { computeFidelity, snapshotFromParsed, snapshotFromTree, type FidelityRecord } from "@/lib/fidelity";
 
 export function sha256(data: Uint8Array): string {
   return createHash("sha256").update(data).digest("hex");
@@ -101,6 +103,19 @@ export async function persistParsedTemplate(
         })),
       );
       if (issErr) throw new Error(`Failed to record import issues: ${issErr.message}`);
+    }
+
+    // Fidelity: re-read what we just stored and compare it to what we parsed.
+    // This is the round-trip proof that the customer's content survived.
+    const tree = await getTemplateTree(templateId);
+    if (tree) {
+      const snapshot = snapshotFromParsed(parsed);
+      const report = computeFidelity(snapshot, snapshotFromTree(tree));
+      const { error: fidErr } = await sb
+        .from("import_runs")
+        .update({ source_snapshot: snapshot, fidelity: { atImport: report, latest: report } satisfies FidelityRecord })
+        .eq("id", run.id);
+      if (fidErr) throw new Error(`Failed to store fidelity report: ${fidErr.message}`);
     }
 
     return { templateId, importRunId: run.id as string, stats: parsed.stats, issuesCount: parsed.issues.length };
