@@ -72,6 +72,32 @@ describe("computeFidelity", () => {
     expect(r.mismatches[0].field).toBe("section.name");
   });
 
+  it("treats a rename as a difference but not as a reorder", () => {
+    const stored = clone(source);
+    stored.sections[2].name = "Roof and Gutters";
+    const r = computeFidelity(source, stored);
+    expect(r.status).toBe("red");
+    expect(r.ordering.sections).toBe(true);
+    expect(r.mismatches[0].label).toBe("Roof");
+  });
+
+  it("detects swapped sections as a reorder", () => {
+    const stored = clone(source);
+    [stored.sections[0], stored.sections[1]] = [stored.sections[1], stored.sections[0]];
+    const r = computeFidelity(source, stored);
+    expect(r.status).toBe("red");
+    expect(r.ordering.sections).toBe(false);
+  });
+
+  it("labels comment differences with the human path", () => {
+    const stored = clone(source);
+    stored.sections[1].items[2].comments[0].text = "changed";
+    const r = computeFidelity(source, stored);
+    const m = r.mismatches.find((x) => x.field === "comment.text")!;
+    expect(m.label).toMatch(/^Exterior > /);
+    expect(m.sectionIndex).toBe(1);
+  });
+
   it("reports extra stored content too", () => {
     const stored = clone(source);
     stored.sections.push({ name: "Bonus", items: [] });

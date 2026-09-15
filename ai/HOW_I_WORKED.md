@@ -28,6 +28,10 @@ The assignment asked to show how I work with AI tools, so this is that, plainly.
 - Reviewing the export file's real structure (42 columns, 393 rows, mixed plain and HTML bodies, padded names, entity-escaped names). The plan changed after this; I had assumed a cleaner file.
 - Choosing the failure fixtures. The list came from asking "what would a customer actually hand us" rather than from the parser's code paths.
 
+## Design pass
+
+On day two I wrote a brief for a design tool (the prompt is in this folder as `DESIGN_PROMPT.md`), attached screenshots of the working app and of Hive's own template editor, and asked for five artboards aimed at a non-technical inspector. I implemented the hierarchy change, the one-section-at-a-time tree, the wording and the kept-fields drawer, and skipped the font, tokens, undo and phone layouts. The design's example of a red state, two edits after import, is now exactly what the app shows when you rename a section and edit a comment.
+
 ## Discipline
 
 - Every feature was checked by running it, not by reading it: unit tests, then the seed script against Supabase, then curl against the upload route, then the page in a browser.

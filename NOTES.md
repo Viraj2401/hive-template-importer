@@ -36,6 +36,8 @@ The brief offered three directions for the one improvement: make the import easi
 
 **Copy is a deep clone.** Every section, item and comment becomes a new row. `scripts/verify-copy.ts` edits the copy and asserts the original is unchanged and no row ids are shared.
 
+**The page is built for a worried inspector, after a design pass.** I ran the working app through a design tool with the brief "make it read clearly to a non-technical home inspector", got five artboards back, and implemented the parts that changed what the inspector sees first: the fidelity check is a full-width band directly under the title, the import notes are a collapsible strip below it, and the tree shows one section at a time from a sticky list. That last change also took the page from about 3 MB of HTML to under 700 KB. Wording follows the same pass: "Everything came through", "In file" and "Stored", "Kept from the export", "Nothing was saved". I skipped the font, the colour tokens, per-comment undo and the phone layouts, because none of them changes what is being assessed.
+
 ## What I cut, and why
 
 | Cut | Why |
@@ -44,7 +46,7 @@ The brief offered three directions for the one improvement: make the import easi
 | Drag-and-drop reordering, add or delete sections and items | Editing here is about correcting an import, not authoring a template. Positions are stored and ready for it. |
 | Users, auth, multi-tenant | Out of scope for a take-home. Service role stays server-side. |
 | Atomic multi-table transaction | supabase-js has no transactions. Inserts are dependency-ordered and a failure deletes the template (cascade), so nothing half-written survives. A Postgres function taking the whole tree as JSON would make it truly atomic and is the next step. |
-| Pagination or lazy loading of the tree | The template page renders all 392 comments and their editors at once. It is about 3 MB of HTML on this template. Fine for a demo, not for a 3,000-comment template. |
+| Lazy loading of comments inside one section | One section renders at a time (see Decisions), which took the page from about 3 MB to under 700 KB. A section with thousands of comments would still be heavy; paging inside a section is the next step. |
 | Re-import into an existing template, merge, versioning | Each import creates a new template. Combined with copy, that is enough to compare before and after. |
 | Editing the 35 preserved-but-unmapped fields (photo captions, defaults, answer types) | They are stored and visible. Building an editor for each would have taken the time from the parts that matter. |
 | Multi-sheet workbooks | Only the first sheet is read. Spectora exports one sheet. |
@@ -90,7 +92,7 @@ Every rejection is also written to `import_runs` with `status = rejected` and sh
 
 1. Sit with one inspector while they import their real template and watch which import notes they actually read. I suspect the missing-vs-unsupported split matters more than I can prove alone.
 2. The Postgres function for atomic import.
-3. Lazy-load items per section; the page is too heavy for large templates.
+3. Page comments inside very large sections; one section at a time is enough for this template, not for every template.
 4. A second platform module (HomeGauge) to confirm the parser boundary is in the right place.
 5. LLM-assisted column mapping as a suggestion step for unknown platforms, never as the writer.
 

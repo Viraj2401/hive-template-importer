@@ -84,7 +84,9 @@ export function CommentEditor({
           disabled={pending}
         />
         <p className="text-[11px] text-muted-foreground">
-          Markup is kept exactly as you type it and sanitised only when displayed. Links and formatting from the export survive.
+          {sourceIsHtml
+            ? "Formatting from your Spectora export is kept exactly as it was. The marks in angle brackets are that formatting: <p> starts a paragraph, <strong> makes text bold, <a href=…> is a link. Change the words; leave the marks where they are."
+            : "Plain text, exactly as exported. Line breaks are kept."}
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -96,6 +98,7 @@ export function CommentEditor({
         </Button>
         {error && <span className="text-xs text-destructive">{error}</span>}
       </div>
+      <p className="text-[11px] text-muted-foreground">Saving will make the fidelity check show this comment as edited after import.</p>
     </div>
   );
 }

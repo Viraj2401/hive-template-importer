@@ -1,34 +1,46 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { FidelityRecord, FidelityReport } from "@/lib/fidelity";
+import { structureIntact, type FidelityRecord, type Mismatch } from "@/lib/fidelity";
 
-const STATUS: Record<FidelityReport["status"], { label: string; cls: string }> = {
-  green: { label: "Faithful", cls: "bg-emerald-100 text-emerald-900 border-emerald-300" },
-  amber: { label: "Whitespace differences only", cls: "bg-amber-100 text-amber-900 border-amber-300" },
-  red: { label: "Differs from source", cls: "bg-red-100 text-red-900 border-red-300" },
+const FIELD_WORD: Record<Mismatch["field"], string> = {
+  "section.name": "Section name",
+  "item.name": "Item name",
+  "comment.name": "Comment name",
+  "comment.text": "Comment text",
+  structure: "Structure",
 };
+
+function kindWord(m: Mismatch): string {
+  if (m.kind === "missing_in_stored") return "In the file, not stored";
+  if (m.kind === "extra_in_stored") return "Stored, not in the file";
+  if (m.kind === "whitespace_only") return "Spacing only";
+  return FIELD_WORD[m.field];
+}
 
 function Row({ label, a, b }: { label: string; a: number; b: number }) {
   const ok = a === b;
   return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={ok ? "" : "font-medium text-red-700"}>
-        {a} → {b} {ok ? "✓" : "✗"}
-      </span>
-    </div>
+    <tr className={ok ? "" : "text-red-700"}>
+      <td className="py-0.5 pr-4 text-muted-foreground">{label}</td>
+      <td className="py-0.5 pr-4 text-right tabular-nums">{a}</td>
+      <td className="py-0.5 pr-2 text-right tabular-nums">{b}</td>
+      <td className="py-0.5">{ok ? "✓" : "✗"}</td>
+    </tr>
   );
 }
 
 export function FidelityPanel({
   record,
+  templateId,
   onRecheck,
 }: {
   record: FidelityRecord;
+  templateId: string;
   onRecheck: () => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
   const router = useRouter();
@@ -36,83 +48,136 @@ export function FidelityPanel({
   const r = record.latest;
   const atImport = record.atImport;
   const drifted = r.checkedAt !== atImport.checkedAt;
-  const s = STATUS[r.status];
+  const intact = structureIntact(r);
+  const n = r.mismatches.length;
+  const nText = n + (r.mismatchesTruncated ? "+" : "");
+  const total = r.counts.source.comments;
+
+  let badge: string;
+  let badgeCls: string;
+  let headline: string;
+  let detail: string;
+  if (r.status === "green") {
+    badge = "Everything came through";
+    badgeCls = "bg-emerald-50 text-emerald-800 border-emerald-300";
+    headline = "Stored template matches the Spectora file";
+    detail = `${drifted ? "Checked again" : "Checked at import"} by reading the stored template back and comparing it with the file. All ${total} comment texts are identical, character for character.`;
+  } else if (r.status === "amber") {
+    badge = "Only spacing differs";
+    badgeCls = "bg-amber-50 text-amber-800 border-amber-300";
+    headline = `${nText} place${n === 1 ? "" : "s"} differ from the file only in spaces or line breaks`;
+    detail = "Every word is the same. All counts match and the order is unchanged.";
+  } else {
+    badge = `${nText} difference${n === 1 ? "" : "s"} from the file`;
+    badgeCls = "bg-red-50 text-red-800 border-red-300";
+    if (drifted && atImport.status === "green" && intact) {
+      headline = n === 1 ? "The difference is an edit made after import. Nothing was lost." : "All differences are edits made after import. Nothing was lost.";
+      detail = "Red means the stored template no longer matches the Spectora file word for word. All counts still match and the order is unchanged. The differences are listed below with the file's text next to what is stored.";
+    } else if (!intact) {
+      headline = "Some content did not come through";
+      detail = "Counts or order differ from the file. The list below names every place. This is the state the check exists to catch.";
+    } else {
+      headline = `The stored text differs from the file in ${nText} place${n === 1 ? "" : "s"}`;
+      detail = "All counts match and the order is unchanged. The differences are listed below with the file's text next to what is stored.";
+    }
+  }
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between text-base">
-          <span>Import fidelity</span>
-          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${s.cls}`}>{s.label}</span>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex flex-wrap items-center gap-3 text-base">
+          <span className={`rounded-full border px-2.5 py-0.5 text-sm font-medium ${badgeCls}`}>{badge}</span>
+          <span className="font-medium">{headline}</span>
         </CardTitle>
+        <p className="text-sm text-muted-foreground">{detail}</p>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-xs text-muted-foreground">
-          {drifted
-            ? `Compared to the source at ${new Date(r.checkedAt).toLocaleString()}. At import it was “${STATUS[atImport.status].label}”.`
-            : `Checked at import by re-reading the stored template and comparing it to the parsed file.`}
-        </p>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-start">
+          <table className="text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground">
+                <th className="pr-4 text-left font-normal"></th>
+                <th className="pr-4 text-right font-normal">In file</th>
+                <th className="pr-2 text-right font-normal">Stored</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <Row label="Sections" a={r.counts.source.sections} b={r.counts.stored.sections} />
+              <Row label="Items" a={r.counts.source.items} b={r.counts.stored.items} />
+              <Row label="Comments" a={r.counts.source.comments} b={r.counts.stored.comments} />
+              <Row label="With formatting" a={r.html.source} b={r.html.stored} />
+              <tr>
+                <td className="py-0.5 pr-4 text-muted-foreground">Text identical</td>
+                <td className="py-0.5 pr-4 text-right tabular-nums" colSpan={2}>
+                  {r.text.exact} of {total}
+                </td>
+                <td className="py-0.5">{r.text.exact === total ? "✓" : ""}</td>
+              </tr>
+              <tr>
+                <td className="py-0.5 pr-4 text-muted-foreground">Order kept</td>
+                <td className="py-0.5 pr-4 text-right" colSpan={2}>
+                  {(["sections", "items", "comments"] as const).filter((k) => r.ordering[k]).join(", ") || "no"}
+                </td>
+                <td className="py-0.5">{r.ordering.sections && r.ordering.items && r.ordering.comments ? "✓" : "✗"}</td>
+              </tr>
+            </tbody>
+          </table>
 
-        <div className="space-y-1">
-          <Row label="Sections (source → stored)" a={r.counts.source.sections} b={r.counts.stored.sections} />
-          <Row label="Items" a={r.counts.source.items} b={r.counts.stored.items} />
-          <Row label="Comments" a={r.counts.source.comments} b={r.counts.stored.comments} />
-          <Row label="Comments with HTML" a={r.html.source} b={r.html.stored} />
+          <div className="space-y-2 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    const res = await onRecheck();
+                    if (res.ok) router.refresh();
+                    else alert(res.error);
+                  })
+                }
+              >
+                {pending ? "Checking…" : "Check again"}
+              </Button>
+              <span className="text-xs text-muted-foreground">Last checked {new Date(r.checkedAt).toLocaleString()}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              After you edit a name or a comment, run the check again. It will turn red and list exactly which cells no longer
+              match the Spectora export. That is expected: your edits are kept, and this is the record of them.
+            </p>
+          </div>
         </div>
 
-        <div className="space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Text identical</span>
-            <span>{r.text.exact}</span>
-          </div>
-          {r.text.whitespaceOnly > 0 && (
-            <div className="flex justify-between text-amber-800">
-              <span>Whitespace-only differences</span>
-              <span>{r.text.whitespaceOnly}</span>
-            </div>
-          )}
-          {r.text.mismatched > 0 && (
-            <div className="flex justify-between text-red-700">
-              <span>Text changed</span>
-              <span>{r.text.mismatched}</span>
-            </div>
-          )}
-          {(r.text.missing > 0 || r.text.extra > 0) && (
-            <div className="flex justify-between text-red-700">
-              <span>Missing / extra comments</span>
-              <span>
-                {r.text.missing} / {r.text.extra}
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Order preserved</span>
-            <span>
-              {r.ordering.sections && r.ordering.items && r.ordering.comments ? "sections, items, comments ✓" : "✗ see details"}
-            </span>
-          </div>
-        </div>
-
-        {r.mismatches.length > 0 && (
-          <details className="rounded-md border">
-            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
-              {r.mismatches.length}
-              {r.mismatchesTruncated ? "+" : ""} difference{r.mismatches.length === 1 ? "" : "s"}
-            </summary>
-            <ul className="max-h-72 divide-y overflow-auto text-xs">
+        {n > 0 && (
+          <details open={r.status === "red"} className="rounded-md border">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">What differs · {nText}</summary>
+            <ul className="divide-y">
               {r.mismatches.map((m, i) => (
-                <li key={i} className="space-y-0.5 px-3 py-2">
-                  <div className="font-mono text-[11px] text-muted-foreground">
-                    {m.path} · {m.field} · {m.kind.replace(/_/g, " ")}
+                <li key={i} className="space-y-1 px-3 py-2 text-sm">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <span className="font-medium">{m.label}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">{kindWord(m)}</span>
+                    </div>
+                    <Link href={`/templates/${templateId}?s=${m.sectionIndex}`} className="text-xs underline underline-offset-2">
+                      Go to section
+                    </Link>
                   </div>
                   {m.source !== null && (
-                    <div className="truncate">
-                      <span className="text-muted-foreground">source:</span> {m.source}
+                    <div className="grid grid-cols-[4rem_1fr] gap-2 text-xs">
+                      <span className="text-muted-foreground">In file</span>
+                      <span className="break-words font-mono" title={m.source}>
+                        {m.source.length > 400 ? m.source.slice(0, 400) + "…" : m.source}
+                      </span>
                     </div>
                   )}
                   {m.stored !== null && (
-                    <div className="truncate">
-                      <span className="text-muted-foreground">stored:</span> {m.stored}
+                    <div className="grid grid-cols-[4rem_1fr] gap-2 text-xs">
+                      <span className="text-muted-foreground">Stored</span>
+                      <span className="break-words font-mono" title={m.stored}>
+                        {m.stored.length > 400 ? m.stored.slice(0, 400) + "…" : m.stored}
+                      </span>
                     </div>
                   )}
                 </li>
@@ -120,25 +185,6 @@ export function FidelityPanel({
             </ul>
           </details>
         )}
-
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={pending}
-          onClick={() =>
-            start(async () => {
-              const res = await onRecheck();
-              if (res.ok) router.refresh();
-              else alert(res.error);
-            })
-          }
-        >
-          {pending ? "Checking…" : "Re-check against source"}
-        </Button>
-        <p className="text-[11px] text-muted-foreground">
-          After editing, a red result is expected and correct: it shows exactly what you changed relative to the Spectora
-          export.
-        </p>
       </CardContent>
     </Card>
   );

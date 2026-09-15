@@ -34,7 +34,12 @@ export interface Snapshot {
 
 export type MismatchKind = "exact_mismatch" | "whitespace_only" | "missing_in_stored" | "extra_in_stored";
 export interface Mismatch {
+  /** Machine path, e.g. sections[1].items[2].comments[4] */
   path: string;
+  /** Human path, e.g. "Exterior > Exterior Doors > Loose Hinge" */
+  label: string;
+  /** Index of the section this belongs to, for linking. */
+  sectionIndex: number;
   field: "section.name" | "item.name" | "comment.name" | "comment.text" | "structure";
   kind: MismatchKind;
   source: string | null;
@@ -99,6 +104,18 @@ function norm(s: string | null): string {
   return decodeEntities(s).replace(/\r\n/g, "\n").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Order is considered broken when a name at a mismatched position also
+ * appears somewhere else in the stored list: that is a move, not a rename.
+ */
+function reordered(src: string[], stored: string[]): boolean {
+  const n = Math.min(src.length, stored.length);
+  for (let i = 0; i < n; i++) {
+    if (src[i] !== stored[i] && src[i] !== "" && stored.includes(src[i])) return true;
+  }
+  return false;
+}
+
 function countAll(s: Snapshot) {
   return {
     sections: s.sections.length,
@@ -117,13 +134,20 @@ export function computeFidelity(source: Snapshot, stored: Snapshot, now: Date = 
     if (mismatches.length < MAX_MISMATCHES) mismatches.push(m);
   };
 
-  const compareStr = (path: string, field: Mismatch["field"], a: string | null, b: string | null): "exact" | "ws" | "diff" => {
+  const compareStr = (
+    path: string,
+    label: string,
+    sectionIndex: number,
+    field: Mismatch["field"],
+    a: string | null,
+    b: string | null,
+  ): "exact" | "ws" | "diff" => {
     if (a === b) return "exact";
     if (norm(a) === norm(b)) {
-      push({ path, field, kind: "whitespace_only", source: a, stored: b });
+      push({ path, label, sectionIndex, field, kind: "whitespace_only", source: a, stored: b });
       return "ws";
     }
-    push({ path, field, kind: "exact_mismatch", source: a, stored: b });
+    push({ path, label, sectionIndex, field, kind: "exact_mismatch", source: a, stored: b });
     return "diff";
   };
 
@@ -133,16 +157,16 @@ export function computeFidelity(source: Snapshot, stored: Snapshot, now: Date = 
     const ts = stored.sections[i];
     const sPath = `sections[${i}]`;
     if (!ss) {
-      push({ path: sPath, field: "structure", kind: "extra_in_stored", source: null, stored: ts.name });
+      push({ path: sPath, label: ts.name, sectionIndex: i, field: "structure", kind: "extra_in_stored", source: null, stored: ts.name });
       ordering.sections = false;
       continue;
     }
     if (!ts) {
-      push({ path: sPath, field: "structure", kind: "missing_in_stored", source: ss.name, stored: null });
+      push({ path: sPath, label: ss.name, sectionIndex: i, field: "structure", kind: "missing_in_stored", source: ss.name, stored: null });
       ordering.sections = false;
       continue;
     }
-    if (compareStr(`${sPath} "${ss.name}"`, "section.name", ss.name, ts.name) === "diff") ordering.sections = false;
+    compareStr(sPath, ss.name, i, "section.name", ss.name, ts.name);
 
     const nIt = Math.max(ss.items.length, ts.items.length);
     for (let j = 0; j < nIt; j++) {
@@ -150,16 +174,17 @@ export function computeFidelity(source: Snapshot, stored: Snapshot, now: Date = 
       const ti = ts.items[j];
       const iPath = `${sPath}.items[${j}]`;
       if (!si) {
-        push({ path: iPath, field: "structure", kind: "extra_in_stored", source: null, stored: ti.name });
+        push({ path: iPath, label: `${ss.name} > ${ti.name}`, sectionIndex: i, field: "structure", kind: "extra_in_stored", source: null, stored: ti.name });
         ordering.items = false;
         continue;
       }
       if (!ti) {
-        push({ path: iPath, field: "structure", kind: "missing_in_stored", source: si.name, stored: null });
+        push({ path: iPath, label: `${ss.name} > ${si.name}`, sectionIndex: i, field: "structure", kind: "missing_in_stored", source: si.name, stored: null });
         ordering.items = false;
         continue;
       }
-      if (compareStr(`${iPath} "${si.name}"`, "item.name", si.name, ti.name) === "diff") ordering.items = false;
+      const iLabel = `${ss.name} > ${si.name}`;
+      compareStr(iPath, iLabel, i, "item.name", si.name, ti.name);
 
       const nC = Math.max(si.comments.length, ti.comments.length);
       for (let k = 0; k < nC; k++) {
@@ -168,13 +193,13 @@ export function computeFidelity(source: Snapshot, stored: Snapshot, now: Date = 
         const cPath = `${iPath}.comments[${k}]`;
         if (!sc) {
           text.extra++;
-          push({ path: cPath, field: "structure", kind: "extra_in_stored", source: null, stored: tc.name });
+          push({ path: cPath, label: `${iLabel} > ${tc.name ?? "(unnamed)"}`, sectionIndex: i, field: "structure", kind: "extra_in_stored", source: null, stored: tc.name });
           ordering.comments = false;
           continue;
         }
         if (!tc) {
           text.missing++;
-          push({ path: cPath, field: "structure", kind: "missing_in_stored", source: sc.name, stored: null });
+          push({ path: cPath, label: `${iLabel} > ${sc.name ?? "(unnamed)"}`, sectionIndex: i, field: "structure", kind: "missing_in_stored", source: sc.name, stored: null });
           ordering.comments = false;
           continue;
         }
@@ -182,14 +207,20 @@ export function computeFidelity(source: Snapshot, stored: Snapshot, now: Date = 
         if (tc.html) html.stored++;
         if (sc.html && !tc.html) html.preserved = false;
 
-        if (compareStr(`${cPath} "${sc.name ?? ""}"`, "comment.name", sc.name, tc.name) === "diff") ordering.comments = false;
-        const r = compareStr(`${cPath} "${sc.name ?? ""}"`, "comment.text", sc.text, tc.text);
+        const cLabel = `${iLabel} > ${sc.name ?? "(unnamed)"}`;
+        compareStr(cPath, cLabel, i, "comment.name", sc.name, tc.name);
+        const r = compareStr(cPath, cLabel, i, "comment.text", sc.text, tc.text);
         if (r === "exact") text.exact++;
         else if (r === "ws") text.whitespaceOnly++;
         else text.mismatched++;
       }
+      // A rename is not a reorder. Order is broken only when a name that
+      // sits at the wrong position also exists elsewhere among its siblings.
+      if (reordered(si.comments.map((c) => c.name ?? ""), ti.comments.map((c) => c.name ?? ""))) ordering.comments = false;
     }
+    if (reordered(ss.items.map((x) => x.name), ts.items.map((x) => x.name))) ordering.items = false;
   }
+  if (reordered(source.sections.map((x) => x.name), stored.sections.map((x) => x.name))) ordering.sections = false;
 
   const counts = { source: countAll(source), stored: countAll(stored) };
   const structuralLoss =
@@ -198,9 +229,10 @@ export function computeFidelity(source: Snapshot, stored: Snapshot, now: Date = 
     counts.source.items !== counts.stored.items ||
     counts.source.comments !== counts.stored.comments;
 
+  const anyExact = mismatches.some((m) => m.kind === "exact_mismatch");
   let status: FidelityReport["status"] = "green";
-  if (structuralLoss || text.mismatched > 0 || !html.preserved) status = "red";
-  else if (text.whitespaceOnly > 0 || mismatches.length > 0) status = "amber";
+  if (structuralLoss || anyExact || !html.preserved) status = "red";
+  else if (mismatches.length > 0) status = "amber";
 
   return {
     status,
@@ -214,7 +246,22 @@ export function computeFidelity(source: Snapshot, stored: Snapshot, now: Date = 
   };
 }
 
-/** Convenience for tests and scripts: does the text we would display differ from the source at all? */
+/** True when every count matches, nothing is missing or extra, and order is intact. */
+export function structureIntact(r: FidelityReport): boolean {
+  const c = r.counts;
+  return (
+    c.source.sections === c.stored.sections &&
+    c.source.items === c.stored.items &&
+    c.source.comments === c.stored.comments &&
+    r.text.missing === 0 &&
+    r.text.extra === 0 &&
+    r.ordering.sections &&
+    r.ordering.items &&
+    r.ordering.comments
+  );
+}
+
+/** Convenience for tests and scripts. */
 export function summarise(r: FidelityReport): string {
   const c = r.counts;
   return [

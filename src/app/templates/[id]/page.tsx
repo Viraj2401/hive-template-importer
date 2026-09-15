@@ -8,7 +8,7 @@ import { EditableName } from "@/components/editable-name";
 import { CommentEditor } from "@/components/comment-editor";
 import { TemplateActions } from "@/components/template-actions";
 import { FidelityPanel } from "@/components/fidelity-panel";
-import type { Comment, ImportIssue } from "@/lib/types";
+import type { Comment, ImportIssue, ImportRun } from "@/lib/types";
 import {
   copyTemplateAction,
   deleteTemplateAction,
@@ -52,19 +52,22 @@ function CommentBody({ c }: { c: Comment }) {
     );
   }
   if (c.body_text) return <p className="whitespace-pre-wrap text-sm">{c.body_text}</p>;
-  return <p className="text-xs italic text-muted-foreground">No narrative text in the export (answer field).</p>;
+  return <p className="text-xs italic text-muted-foreground">No text in the export. This is an answer-style field in Spectora.</p>;
 }
 
-function ExtraDetails({ extra, platform }: { extra: Record<string, unknown>; platform: string }) {
+function KeptFields({ extra, platform, unmappedTotal }: { extra: Record<string, unknown>; platform: string; unmappedTotal: number | null }) {
   const entries = Object.entries(extra).filter(([k]) => k !== "source_row");
-  if (entries.length === 0) return null;
+  const filled = entries.filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== "");
+  const emptyInFile = unmappedTotal !== null ? Math.max(unmappedTotal - filled.filter(([k]) => k !== "raw_name").length, 0) : null;
+  if (filled.length === 0 && !emptyInFile) return null;
   return (
     <details className="mt-1 text-xs text-muted-foreground">
       <summary className="cursor-pointer select-none">
-        {entries.length} other {platform} field{entries.length === 1 ? "" : "s"}, kept but not editable here
+        Kept from the export: {filled.length} field{filled.length === 1 ? "" : "s"}
       </summary>
+      <p className="mt-1">Read-only here; they travel with the comment when you copy the template.</p>
       <dl className="mt-1 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5">
-        {entries.map(([k, v]) => (
+        {filled.map(([k, v]) => (
           <div key={k} className="contents">
             <dt className="truncate font-medium" title={k}>
               {cleanHeader(k)}
@@ -73,31 +76,66 @@ function ExtraDetails({ extra, platform }: { extra: Record<string, unknown>; pla
           </div>
         ))}
       </dl>
+      {emptyInFile !== null && emptyInFile > 0 && (
+        <p className="mt-1">
+          {emptyInFile} more of the {platform} columns are empty in the file for this comment.
+        </p>
+      )}
     </details>
   );
 }
 
-function IssuesPanel({ issues }: { issues: ImportIssue[] }) {
-  if (issues.length === 0) return null;
+function ImportNotes({ issues, run, parent }: { issues: ImportIssue[]; run: ImportRun | null; parent: { id: string; name: string } | null }) {
+  if (issues.length === 0 && !run) {
+    if (parent) {
+      return (
+        <p className="text-sm text-muted-foreground">
+          Import notes and the fidelity check live on the original:{" "}
+          <Link href={`/templates/${parent.id}`} className="underline">
+            {parent.name}
+          </Link>
+          .
+        </p>
+      );
+    }
+    return null;
+  }
   const groups: Record<string, ImportIssue[]> = {};
   for (const i of issues) (groups[i.severity] ??= []).push(i);
+  const count = (s: string) => groups[s]?.length ?? 0;
   const order = ["skipped", "warning", "unsupported", "info"];
   const label: Record<string, string> = {
-    skipped: "Skipped (content not imported)",
+    skipped: "Skipped",
     warning: "Warnings",
-    unsupported: "Preserved but not editable here",
+    unsupported: "Kept, not editable here",
     info: "Notes",
   };
+  const summary = [
+    count("skipped") === 0 ? "Nothing skipped" : `${count("skipped")} skipped`,
+    `${count("warning")} warning${count("warning") === 1 ? "" : "s"}`,
+    `${count("unsupported")} field${count("unsupported") === 1 ? "" : "s"} kept but not editable here`,
+    `${count("info")} note${count("info") === 1 ? "" : "s"}`,
+  ].join(" · ");
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Import notes · {issues.length}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <details className="rounded-lg border bg-muted/20">
+      <summary className="cursor-pointer select-none px-4 py-2.5 text-sm">
+        <span className="font-medium">Import notes</span>
+        <span className="ml-2 text-muted-foreground">{summary}</span>
+      </summary>
+      <div className="space-y-3 border-t px-4 py-3">
+        {run && (
+          <p className="text-sm text-muted-foreground">
+            File had {run.rows_total ?? "?"} rows and {run.columns_seen?.length ?? "?"} columns; {run.columns_mapped?.length ?? "?"} are shown as
+            fields here.
+            {run.file_hash && <span className="ml-1 font-mono text-xs">sha256 {run.file_hash.slice(0, 16)}…</span>}
+          </p>
+        )}
+        {count("skipped") === 0 && <p className="text-sm">Skipped: nothing. Every row in the file became a comment.</p>}
         {order
           .filter((s) => groups[s]?.length)
           .map((s) => (
-            <details key={s} open={s === "skipped" || s === "warning"} className="rounded-md border">
+            <details key={s} open={s === "skipped" || s === "warning"} className="rounded-md border bg-background">
               <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
                 {label[s]} · {groups[s].length}
               </summary>
@@ -120,13 +158,20 @@ function IssuesPanel({ issues }: { issues: ImportIssue[] }) {
               </ul>
             </details>
           ))}
-      </CardContent>
-    </Card>
+      </div>
+    </details>
   );
 }
 
-export default async function TemplatePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TemplatePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ s?: string }>;
+}) {
   const { id } = await params;
+  const { s } = await searchParams;
   const tree = await getTemplateTree(id);
   if (!tree) notFound();
   const [run, issues, parent] = await Promise.all([
@@ -137,17 +182,24 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
 
   const counts = {
     sections: tree.sections.length,
-    items: tree.sections.reduce((n, s) => n + s.items.length, 0),
-    comments: tree.sections.reduce((n, s) => n + s.items.reduce((m, i) => m + i.comments.length, 0), 0),
+    items: tree.sections.reduce((n, sec) => n + sec.items.length, 0),
+    comments: tree.sections.reduce((n, sec) => n + sec.items.reduce((m, i) => m + i.comments.length, 0), 0),
   };
 
-  // Bind template id into the actions so client components stay simple.
+  // One section on screen at a time. The server renders only the chosen one,
+  // so a 392-comment template does not become a 3 MB page.
+  const requested = Number.parseInt(s ?? "0", 10);
+  const sIdx = Math.min(Math.max(Number.isFinite(requested) ? requested : 0, 0), Math.max(tree.sections.length - 1, 0));
+  const section = tree.sections[sIdx];
+  const platform = platformName(tree.source_platform);
+  const unmappedTotal = run?.columns_seen && run?.columns_mapped ? run.columns_seen.length - run.columns_mapped.length : null;
+
   const renameTemplate = renameTemplateAction.bind(null, id);
   const copy = copyTemplateAction.bind(null, id);
   const del = deleteTemplateAction.bind(null, id);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -160,7 +212,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
                 </Link>
               </Badge>
             ) : (
-              <Badge variant="outline">Imported from {platformName(tree.source_platform)}</Badge>
+              <Badge variant="outline">Imported from {platform}</Badge>
             )}
           </div>
           <p className="text-sm text-muted-foreground">
@@ -173,98 +225,92 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
         <TemplateActions onCopy={copy} onDelete={del} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <div className="space-y-4">
-          {tree.sections.map((s) => (
-            <Card key={s.id} id={`section-${s.id}`}>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  <EditableName name={s.name} onSave={renameSectionAction.bind(null, id, s.id)} />
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">{s.items.length} items</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {s.items.map((it) => (
-                  <details key={it.id} className="rounded-md border">
-                    <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
-                      <EditableName name={it.name} onSave={renameItemAction.bind(null, id, it.id)} />
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">{it.comments.length}</span>
-                    </summary>
-                    <ul className="divide-y">
-                      {it.comments.map((c) => (
-                        <li key={c.id} className="px-3 py-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium">{c.name ?? <em className="text-muted-foreground">unnamed</em>}</span>
-                            {c.comment_type && (
-                              <Badge variant={typeVariant(c.comment_type)}>{TYPE_LABEL[c.comment_type] ?? c.comment_type}</Badge>
-                            )}
-                            {c.category && (
-                              <span className="text-xs text-muted-foreground">
-                                Severity: {SEVERITY_LABEL[c.category] ?? c.category}
-                              </span>
-                            )}
-                            {c.recommendation && (
-                              <span className="text-xs text-muted-foreground">Recommendation: {c.recommendation}</span>
-                            )}
-                          </div>
-                          <div className="mt-1">
-                            <CommentEditor
-                              name={c.name}
-                              bodyHtml={c.body_html}
-                              bodyText={c.body_text}
-                              onSave={updateCommentAction.bind(null, id, c.id)}
-                            >
-                              <CommentBody c={c} />
-                            </CommentEditor>
-                          </div>
-                          <ExtraDetails extra={c.extra} platform={platformName(tree.source_platform)} />
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      {run?.fidelity && <FidelityPanel record={run.fidelity} templateId={id} onRecheck={recheckFidelityAction.bind(null, id)} />}
 
-        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          {run?.fidelity && <FidelityPanel record={run.fidelity} onRecheck={recheckFidelityAction.bind(null, id)} />}
-          {run && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Import</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Rows in file</span> · {run.rows_total}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Columns seen</span> · {run.columns_seen?.length ?? 0}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Columns mapped</span> · {run.columns_mapped?.length ?? 0}
-                </div>
-                {run.file_hash && (
-                  <div className="truncate font-mono text-xs text-muted-foreground">sha256 {run.file_hash.slice(0, 16)}…</div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-          {parent && issues.length === 0 && (
-            <Card>
-              <CardContent className="pt-6 text-sm text-muted-foreground">
-                Import notes live on the original:{" "}
-                <Link href={`/templates/${parent.id}`} className="underline">
-                  {parent.name}
-                </Link>
-                .
-              </CardContent>
-            </Card>
-          )}
-          <IssuesPanel issues={issues} />
-        </aside>
-      </div>
+      <ImportNotes issues={issues} run={run} parent={parent} />
+
+      {section ? (
+        <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+          <nav aria-label="Sections" className="lg:sticky lg:top-6 lg:self-start">
+            <div className="mb-1 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Sections</div>
+            <ol className="flex flex-wrap gap-1 lg:flex-col lg:gap-0.5">
+              {tree.sections.map((sec, i) => {
+                const n = sec.items.reduce((m, it) => m + it.comments.length, 0);
+                const active = i === sIdx;
+                return (
+                  <li key={sec.id}>
+                    <Link
+                      href={`/templates/${id}?s=${i}`}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm ${
+                        active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                      }`}
+                    >
+                      <span className="truncate">{sec.name}</span>
+                      <span className={`text-xs tabular-nums ${active ? "opacity-80" : "text-muted-foreground"}`}>{n}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+
+          <Card id={`section-${section.id}`}>
+            <CardHeader>
+              <CardTitle className="text-lg">
+                <EditableName name={section.name} onSave={renameSectionAction.bind(null, id, section.id)} />
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Section {sIdx + 1} of {tree.sections.length} · {section.items.length} items ·{" "}
+                {section.items.reduce((m, it) => m + it.comments.length, 0)} comments
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {section.items.map((it) => (
+                <details key={it.id} className="rounded-md border">
+                  <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
+                    <EditableName name={it.name} onSave={renameItemAction.bind(null, id, it.id)} />
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {it.comments.length} comment{it.comments.length === 1 ? "" : "s"}
+                    </span>
+                  </summary>
+                  <ul className="divide-y">
+                    {it.comments.map((c) => (
+                      <li key={c.id} className="px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium">{c.name ?? <em className="text-muted-foreground">unnamed</em>}</span>
+                          {c.comment_type && (
+                            <Badge variant={typeVariant(c.comment_type)}>{TYPE_LABEL[c.comment_type] ?? c.comment_type}</Badge>
+                          )}
+                          {c.category && (
+                            <span className="text-xs text-muted-foreground">Severity: {SEVERITY_LABEL[c.category] ?? c.category}</span>
+                          )}
+                          {c.recommendation && (
+                            <span className="text-xs text-muted-foreground">Recommendation: {c.recommendation}</span>
+                          )}
+                        </div>
+                        <div className="mt-1">
+                          <CommentEditor
+                            name={c.name}
+                            bodyHtml={c.body_html}
+                            bodyText={c.body_text}
+                            onSave={updateCommentAction.bind(null, id, c.id)}
+                          >
+                            <CommentBody c={c} />
+                          </CommentEditor>
+                        </div>
+                        <KeptFields extra={c.extra} platform={platform} unmappedTotal={unmappedTotal} />
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">This template has no sections.</p>
+      )}
     </div>
   );
 }
