@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -55,9 +56,11 @@ export function CommentEditor({
             setBody(bodyHtml ?? bodyText ?? "");
             setEditing(true);
           }}
-          className="mt-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
+          className="mt-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Edit this comment"
         >
-          edit
+          <Pencil className="h-3 w-3" aria-hidden="true" />
+          Edit
         </button>
       </div>
     );

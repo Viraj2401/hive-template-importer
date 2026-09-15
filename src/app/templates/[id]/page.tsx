@@ -27,6 +27,21 @@ function typeVariant(t: string | null): "default" | "secondary" | "destructive" 
   return "outline";
 }
 
+// Spectora's codes, shown as words. Unknown values fall through unchanged.
+const TYPE_LABEL: Record<string, string> = { info: "Information", limit: "Limitation", defect: "Defect" };
+const SEVERITY_LABEL: Record<string, string> = { "-1": "Low", "0": "Medium", "1": "High" };
+
+function platformName(p: string | null): string {
+  if (!p) return "import";
+  return p.charAt(0).toUpperCase() + p.slice(1);
+}
+
+/** "Multiple Choice Options (comma-separated)" -> "Multiple Choice Options" */
+function cleanHeader(k: string): string {
+  if (k === "raw_name") return "Original name in export";
+  return k.replace(/\s*\(.*$/, "").trim();
+}
+
 function CommentBody({ c }: { c: Comment }) {
   if (c.body_html) {
     return (
@@ -40,18 +55,20 @@ function CommentBody({ c }: { c: Comment }) {
   return <p className="text-xs italic text-muted-foreground">No narrative text in the export (answer field).</p>;
 }
 
-function ExtraDetails({ extra }: { extra: Record<string, unknown> }) {
+function ExtraDetails({ extra, platform }: { extra: Record<string, unknown>; platform: string }) {
   const entries = Object.entries(extra).filter(([k]) => k !== "source_row");
   if (entries.length === 0) return null;
   return (
     <details className="mt-1 text-xs text-muted-foreground">
       <summary className="cursor-pointer select-none">
-        {entries.length} preserved field{entries.length === 1 ? "" : "s"} from the export
+        {entries.length} other {platform} field{entries.length === 1 ? "" : "s"}, kept but not editable here
       </summary>
       <dl className="mt-1 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5">
         {entries.map(([k, v]) => (
           <div key={k} className="contents">
-            <dt className="truncate font-medium">{k}</dt>
+            <dt className="truncate font-medium" title={k}>
+              {cleanHeader(k)}
+            </dt>
             <dd className="truncate">{String(v)}</dd>
           </div>
         ))}
@@ -143,7 +160,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
                 </Link>
               </Badge>
             ) : (
-              <Badge variant="outline">{tree.source_platform}</Badge>
+              <Badge variant="outline">Imported from {platformName(tree.source_platform)}</Badge>
             )}
           </div>
           <p className="text-sm text-muted-foreground">
@@ -178,9 +195,17 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
                         <li key={c.id} className="px-3 py-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-medium">{c.name ?? <em className="text-muted-foreground">unnamed</em>}</span>
-                            {c.comment_type && <Badge variant={typeVariant(c.comment_type)}>{c.comment_type}</Badge>}
-                            {c.category && <span className="text-xs text-muted-foreground">severity {c.category}</span>}
-                            {c.recommendation && <span className="text-xs text-muted-foreground">rec: {c.recommendation}</span>}
+                            {c.comment_type && (
+                              <Badge variant={typeVariant(c.comment_type)}>{TYPE_LABEL[c.comment_type] ?? c.comment_type}</Badge>
+                            )}
+                            {c.category && (
+                              <span className="text-xs text-muted-foreground">
+                                Severity: {SEVERITY_LABEL[c.category] ?? c.category}
+                              </span>
+                            )}
+                            {c.recommendation && (
+                              <span className="text-xs text-muted-foreground">Recommendation: {c.recommendation}</span>
+                            )}
                           </div>
                           <div className="mt-1">
                             <CommentEditor
@@ -192,7 +217,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
                               <CommentBody c={c} />
                             </CommentEditor>
                           </div>
-                          <ExtraDetails extra={c.extra} />
+                          <ExtraDetails extra={c.extra} platform={platformName(tree.source_platform)} />
                         </li>
                       ))}
                     </ul>

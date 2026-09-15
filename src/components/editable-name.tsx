@@ -2,11 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 type Save = (name: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 
+/**
+ * A name with an always-visible pencil button. The pencil is the only edit
+ * trigger on purpose: item names live inside <summary>, where clicking the
+ * text should expand the item, not start a rename.
+ */
 export function EditableName({
   name,
   onSave,
@@ -39,26 +45,30 @@ export function EditableName({
   }
 
   if (!editing) {
+    const iconSize = Tag === "h1" ? "h-4 w-4" : "h-3.5 w-3.5";
     return (
-      <Tag className={className}>
-        {name}
+      <Tag className={`inline-flex items-center gap-1.5 ${className ?? ""}`}>
+        <span>{name}</span>
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             setValue(name);
             setEditing(true);
           }}
-          className="ml-2 align-middle text-xs text-muted-foreground underline-offset-2 hover:underline"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2"
           aria-label={`Rename ${name}`}
+          title="Rename"
         >
-          rename
+          <Pencil className={iconSize} aria-hidden="true" />
         </button>
       </Tag>
     );
   }
 
   return (
-    <span className="inline-flex flex-wrap items-center gap-2">
+    <span className="inline-flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <Input
         autoFocus
         value={value}
@@ -67,7 +77,7 @@ export function EditableName({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="h-8 w-72"
+        className="h-8 w-72 font-normal"
         disabled={pending}
       />
       <Button size="sm" onClick={commit} disabled={pending}>

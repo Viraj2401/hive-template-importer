@@ -40,7 +40,13 @@ export default async function HomePage() {
                   <CardHeader>
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="text-base">{t.name}</CardTitle>
-                      {t.parent_template_id ? <Badge variant="secondary">copy</Badge> : <Badge variant="outline">{t.source_platform}</Badge>}
+                      {t.parent_template_id ? (
+                        <Badge variant="secondary">copy</Badge>
+                      ) : (
+                        <Badge variant="outline">
+                          From {t.source_platform ? t.source_platform.charAt(0).toUpperCase() + t.source_platform.slice(1) : "import"}
+                        </Badge>
+                      )}
                     </div>
                     <CardDescription>
                       {parent ? `Copy of “${parent.name}”` : t.source_file_name ?? "—"}
