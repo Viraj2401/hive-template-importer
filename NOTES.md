@@ -80,6 +80,19 @@ All generated from the real export by `npm run fixtures`, all covered by tests, 
 
 Every rejection is also written to `import_runs` with `status = rejected` and shown on the home page.
 
+## Other real templates tried
+
+The brief says another export in the same format may be tried. On day two I exported four more templates from Spectora's library and imported them on the live site without touching the parser. All four came through green.
+
+| Template | Shape | Result at import |
+| --- | --- | --- |
+| ASHI Residential Inspection | 12 sections, 62 items, 355 comments, 198 with formatting; one comment carries a default photo | 355 of 355 texts identical, 198 of 198 formatted, order kept |
+| ASHI Residential, modified in Spectora | Same, plus a bullet list with a bold phrase added to one comment | 355 of 355, 199 of 199; the list and the bold survived byte for byte |
+| Florida 4-Point Inspection Form (2025) | 6 sections, 17 items, 95 comments, 94 of them form fields with no narrative | 95 of 95, order kept; Spectora warns on export that it contains locked items, and the export still imports |
+| InterNACHI Commercial Template | 15 sections, 67 items, 406 comments, 214 with formatting | 406 of 406, 214 of 214, order kept |
+
+Two things learned. Spectora exports a default photo as a URL on its CDN in the "Default Photo 1" column; the importer keeps it in the comment's extra fields, so an importer that wanted to bring photos across would download from there. And the "Locked" column is exported but never true in these files, so Spectora's locked sections are not visible in the export at all; that is a case of missing-in-source, not unsupported-by-importer, and the notes say so.
+
 ## How I checked
 
 - `npm test`: 37 tests. Parser behaviour on the real file (counts, order, entities, HTML verbatim, extra fields, missing vs unsupported), 7 fidelity scenarios (exact, whitespace-only, changed text, dropped comment, flattened HTML, renamed section, extra section), the 8 fixtures above.
