@@ -252,6 +252,7 @@ export default async function TemplatePage({
                   <li key={sec.id} className="min-w-0 max-w-full">
                     <Link
                       href={`/templates/${id}?s=${i}`}
+                      scroll={false}
                       title={sec.name}
                       aria-current={active ? "page" : undefined}
                       className={`flex w-full min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm ${
