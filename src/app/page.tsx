@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listTemplates, listRejectedImports } from "@/lib/db/templates";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LocalTime } from "@/components/local-time";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export default async function HomePage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="text-xs text-muted-foreground">
-                    Updated {new Date(t.updated_at).toLocaleString()}
+                    Updated <LocalTime iso={t.updated_at} />
                   </CardContent>
                 </Card>
               </Link>
@@ -70,7 +71,7 @@ export default async function HomePage() {
               <li key={r.id} className="flex items-center justify-between gap-4 px-3 py-2">
                 <span className="truncate">{r.file_name ?? "(unnamed file)"}</span>
                 <span className="truncate text-muted-foreground">{r.reject_reason}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</span>
+                <LocalTime iso={r.created_at} className="shrink-0 text-xs text-muted-foreground" />
               </li>
             ))}
           </ul>

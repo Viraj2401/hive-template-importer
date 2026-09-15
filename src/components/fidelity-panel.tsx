@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LocalTime } from "@/components/local-time";
 import { structureIntact, type FidelityRecord, type Mismatch } from "@/lib/fidelity";
 
 const FIELD_WORD: Record<Mismatch["field"], string> = {
@@ -26,8 +27,8 @@ function Row({ label, a, b }: { label: string; a: number; b: number }) {
   const ok = a === b;
   return (
     <tr className={ok ? "" : "text-red-700"}>
-      <td className="py-0.5 pr-4 text-muted-foreground">{label}</td>
-      <td className="py-0.5 pr-4 text-right tabular-nums">{a}</td>
+      <td className="py-0.5 pr-3 text-muted-foreground">{label}</td>
+      <td className="py-0.5 pr-3 text-right tabular-nums">{a}</td>
       <td className="py-0.5 pr-2 text-right tabular-nums">{b}</td>
       <td className="py-0.5">{ok ? "✓" : "✗"}</td>
     </tr>
@@ -93,13 +94,13 @@ export function FidelityPanel({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-start">
-          <table className="text-sm">
+          <table className="w-full max-w-sm text-sm">
             <thead>
               <tr className="text-xs text-muted-foreground">
-                <th className="pr-4 text-left font-normal"></th>
-                <th className="pr-4 text-right font-normal">In file</th>
+                <th className="pr-3 text-left font-normal"></th>
+                <th className="pr-3 text-right font-normal">In file</th>
                 <th className="pr-2 text-right font-normal">Stored</th>
-                <th></th>
+                <th className="w-4"></th>
               </tr>
             </thead>
             <tbody>
@@ -108,15 +109,15 @@ export function FidelityPanel({
               <Row label="Comments" a={r.counts.source.comments} b={r.counts.stored.comments} />
               <Row label="With formatting" a={r.html.source} b={r.html.stored} />
               <tr>
-                <td className="py-0.5 pr-4 text-muted-foreground">Text identical</td>
-                <td className="py-0.5 pr-4 text-right tabular-nums" colSpan={2}>
+                <td className="py-0.5 pr-3 text-muted-foreground">Text identical</td>
+                <td className="py-0.5 pr-2 text-right tabular-nums" colSpan={2}>
                   {r.text.exact} of {total}
                 </td>
                 <td className="py-0.5">{r.text.exact === total ? "✓" : ""}</td>
               </tr>
               <tr>
-                <td className="py-0.5 pr-4 text-muted-foreground">Order kept</td>
-                <td className="py-0.5 pr-4 text-right" colSpan={2}>
+                <td className="py-0.5 pr-3 text-muted-foreground">Order kept</td>
+                <td className="py-0.5 pr-2 text-right whitespace-normal" colSpan={2}>
                   {(["sections", "items", "comments"] as const).filter((k) => r.ordering[k]).join(", ") || "no"}
                 </td>
                 <td className="py-0.5">{r.ordering.sections && r.ordering.items && r.ordering.comments ? "✓" : "✗"}</td>
@@ -140,7 +141,9 @@ export function FidelityPanel({
               >
                 {pending ? "Checking…" : "Check again"}
               </Button>
-              <span className="text-xs text-muted-foreground">Last checked {new Date(r.checkedAt).toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground">
+                Last checked <LocalTime iso={r.checkedAt} />
+              </span>
             </div>
             <p className="text-xs text-muted-foreground">
               After you edit a name or a comment, run the check again. It will turn red and list exactly which cells no longer

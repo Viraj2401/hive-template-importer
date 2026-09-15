@@ -8,6 +8,7 @@ import { EditableName } from "@/components/editable-name";
 import { CommentEditor } from "@/components/comment-editor";
 import { TemplateActions } from "@/components/template-actions";
 import { FidelityPanel } from "@/components/fidelity-panel";
+import { LocalTime } from "@/components/local-time";
 import type { Comment, ImportIssue, ImportRun } from "@/lib/types";
 import {
   copyTemplateAction,
@@ -218,8 +219,18 @@ export default async function TemplatePage({
           <p className="text-sm text-muted-foreground">
             {counts.sections} sections · {counts.items} items · {counts.comments} comments
             {tree.source_file_name && <> · from <span className="font-mono">{tree.source_file_name}</span></>}
-            {run && <> · imported {new Date(run.created_at).toLocaleString()}</>}
-            {parent && <> · copied {new Date(tree.created_at).toLocaleString()}</>}
+            {run && (
+              <>
+                {" "}
+                · imported <LocalTime iso={run.created_at} />
+              </>
+            )}
+            {parent && (
+              <>
+                {" "}
+                · copied <LocalTime iso={tree.created_at} />
+              </>
+            )}
           </p>
         </div>
         <TemplateActions onCopy={copy} onDelete={del} />
@@ -230,24 +241,25 @@ export default async function TemplatePage({
       <ImportNotes issues={issues} run={run} parent={parent} />
 
       {section ? (
-        <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
-          <nav aria-label="Sections" className="lg:sticky lg:top-6 lg:self-start">
+        <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <nav aria-label="Sections" className="min-w-0 lg:sticky lg:top-6 lg:self-start">
             <div className="mb-1 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Sections</div>
-            <ol className="flex flex-wrap gap-1 lg:flex-col lg:gap-0.5">
+            <ol className="flex w-full flex-wrap gap-1 lg:flex-col lg:gap-0.5">
               {tree.sections.map((sec, i) => {
                 const n = sec.items.reduce((m, it) => m + it.comments.length, 0);
                 const active = i === sIdx;
                 return (
-                  <li key={sec.id}>
+                  <li key={sec.id} className="min-w-0 max-w-full">
                     <Link
                       href={`/templates/${id}?s=${i}`}
+                      title={sec.name}
                       aria-current={active ? "page" : undefined}
-                      className={`flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm ${
+                      className={`flex w-full min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm ${
                         active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                       }`}
                     >
-                      <span className="truncate">{sec.name}</span>
-                      <span className={`text-xs tabular-nums ${active ? "opacity-80" : "text-muted-foreground"}`}>{n}</span>
+                      <span className="min-w-0 truncate">{sec.name}</span>
+                      <span className={`shrink-0 text-xs tabular-nums ${active ? "opacity-80" : "text-muted-foreground"}`}>{n}</span>
                     </Link>
                   </li>
                 );
@@ -255,14 +267,15 @@ export default async function TemplatePage({
             </ol>
           </nav>
 
-          <Card id={`section-${section.id}`}>
+          <Card id={`section-${section.id}`} className="min-w-0">
             <CardHeader>
               <CardTitle className="text-lg">
                 <EditableName name={section.name} onSave={renameSectionAction.bind(null, id, section.id)} />
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Section {sIdx + 1} of {tree.sections.length} · {section.items.length} items ·{" "}
-                {section.items.reduce((m, it) => m + it.comments.length, 0)} comments
+                Section {sIdx + 1} of {tree.sections.length} · {section.items.length} item{section.items.length === 1 ? "" : "s"} ·{" "}
+                {section.items.reduce((m, it) => m + it.comments.length, 0)} comment
+                {section.items.reduce((m, it) => m + it.comments.length, 0) === 1 ? "" : "s"}
               </p>
             </CardHeader>
             <CardContent className="space-y-2">
