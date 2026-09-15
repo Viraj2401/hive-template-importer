@@ -107,7 +107,19 @@ Approximate, across one long working day plus documentation and video.
 
 ## Hive Inspect product feedback
 
-TODO(Viraj): 3 to 5 observations from the trial, each tied to something specific I saw. Import flow, template editor, and what the fidelity report here would look like inside Hive.
+From a trial account on 15 September 2026. I imported the same InterNACHI Residential export into Hive through Templates, Upload, Spectora, and then checked it field by field against what my importer holds for the same file.
+
+**1. The import is faithful on content, and Hive should say so.** When I imported the export, Hive showed 13 sections, 69 subsections and 392 fields, the same counts my importer produced. Paragraph breaks, bold text and links survived in comment bodies, multiple-choice fields arrived with their options, medium severity became Recommendations and high became Safety Concerns, and the Spectora recommendation "monitor" arrived as the Service "Monitor". I expected some loss and found none. This is the thing inspectors fear most when switching, and it is done well.
+
+**2. The import reports nothing.** When the import finished, I got a toast saying "Successfully imported" and nothing else: no counts, no list of what was mapped, changed or skipped. I expected a summary I could check against my Spectora template. Without it, the only way to trust the import is to open every subsection, which took me twenty minutes on a stock template and would take an afternoon on a real one. The fidelity report in this project is what I would want at that moment: source counts against stored counts, a green or red badge, and a list of the exact places anything differs.
+
+**3. Order across comment types is regrouped, silently.** Hive groups fields in a subsection into Information, Limitations and Deficiencies bands. In the Spectora file the inspector's order within an item mixes types: Exterior, Exterior Doors is defect, info, defect, defect and so on. Hive keeps the order inside each band and drops the order across bands, and nothing tells the inspector. I expected either the original order or a note saying it was regrouped. Inspectors put their most used comments first on purpose. This is exactly the kind of change an import summary should list.
+
+**4. "You have unsaved changes" on first open, with no changes made.** When I opened the imported template for the first time, the unsaved-changes banner was already showing before I touched anything. I expected a clean state. A new user does not know whether the import left something half done or whether the banner is noise, and the safe reaction is to stop trusting the screen.
+
+**5. The upload dialog does not say which Spectora export to use.** It says "Excel files only (.xls, .xlsx)". Spectora offers two exports, "Export Text" and "Export HTML Text", and only the second keeps formatting. I expected one line telling the inspector which to pick. I did not test what Hive does with the plain-text file; my own importer accepts it and warns that no formatting was found, which is the behaviour I would want here too.
+
+Smaller thing: the onboarding card asks "What software were you using before Hive?" and I answered Spectora. It thanked me and did nothing with the answer. A link to the importer at that moment would be cheap and useful.
 
 ## How I worked
 
