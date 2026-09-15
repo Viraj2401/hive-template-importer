@@ -2,6 +2,8 @@
 
 Import an inspection template exported from Spectora, keep every section, item and comment exactly as it was, and prove it.
 
+Live demo: https://hive-template-importer.vercel.app (password shared separately).
+
 Take-home for the Forward Deployed Engineer role at Hive Inspect. See [NOTES.md](NOTES.md) for decisions, cuts, limitations and how it was checked, and [ai/](ai/) for how the work was done.
 
 ## What it does
