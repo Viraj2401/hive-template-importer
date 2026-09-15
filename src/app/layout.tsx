@@ -11,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen bg-background text-foreground antialiased">
-        <header className="border-b">
+        <header className="border-b bg-card">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
             <Link href="/" className="font-semibold tracking-tight">
               Template Importer
