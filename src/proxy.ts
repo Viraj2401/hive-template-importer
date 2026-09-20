@@ -20,7 +20,7 @@ export async function proxy(req: NextRequest) {
   if (!password) return NextResponse.next();
 
   const { pathname } = req.nextUrl;
-  if (pathname === "/unlock" || pathname === "/api/unlock") return NextResponse.next();
+  if (pathname === "/unlock" || pathname === "/api/unlock" || pathname === "/api/lock") return NextResponse.next();
 
   const expected = await sha256Hex(password);
   if (req.cookies.get(COOKIE)?.value === expected) return NextResponse.next();

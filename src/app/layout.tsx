@@ -23,6 +23,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/import" className="rounded-md bg-primary px-3 py-1.5 text-primary-foreground hover:opacity-90">
                 Import
               </Link>
+              {process.env.DEMO_PASSWORD && (
+                <a href="/api/lock" className="text-muted-foreground hover:text-foreground" title="Forget the demo password on this browser">
+                  Lock
+                </a>
+              )}
             </nav>
           </div>
         </header>
